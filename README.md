@@ -1,1 +1,1 @@
-This Script is Used to Clean and Geocode CWSRF Project Data. The repository includes two different scripts. One cleans and geocodes the data (CWSRF_processing.py). The other aggregated the geocoded project data by location.
+This Script is Used to Clean and Geocode CWSRF Project Data. The repository includes two different scripts. One cleans and geocodes the data (CWSRF_processing.py). The other aggregated the geocoded project data by location and it exports a GIS file that can be used in a map (CWSRF_aggregate.py).

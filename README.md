@@ -1,2 +1,1 @@
-# CWSRF_Clean_Geocode
-This Script is Used to Clean and Geocode CWSRF Project Data
+This Script is Used to Clean and Geocode CWSRF Project Data. The repository includes two different scripts. One cleans and geocodes the data, while the other aggregated the geocoded project data by location.

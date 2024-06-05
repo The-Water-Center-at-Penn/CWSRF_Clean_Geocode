@@ -7,26 +7,27 @@ import arcgis
 import arcpy
 import os
 
+#Columns to keep for origional data
 keep_cols = ['Region','State','Borrower Name','State Tracking Number','Type of Assistance','Supplemental Appropriation','Latest Agreement Action', \
       'Initial Agreement Date','Initial Agreement Amount','Date of Latest Agreement Action','Current Agreement Amount','Hardship/Disadvantaged Community?', \
-      'Facility Name','Project Name','Project Description','Population Served by Project','Project Needs Categories','Project Start','Project Completion Date']
+      'Includes Additional Subsidy?','Additional Subsidy Amount','Facility Name','Project Name','Project Description','Population Served by Project','Project Needs Categories','Project Start','Project Completion Date']
 
-
+#Path to raw data from 
 file = r'.\Inputs\CWSRF_Projects_2018to2023.xlsx'
 
-arcpy.env.workspace = r'C:\Users\richa\OneDrive\Documents\Professional\Water Center Work\FOIA_Data_Processing'
-arcpy.env.overwriteOutput = True
+arcpy.env.workspace = r'C:\Users\richa\OneDrive\Documents\Professional\Water Center Work\FOIA_Data_Processing' #Path to arcpy workspace
+arcpy.env.overwriteOutput = True #Allow file overwrite
 
 de_basin = os.path.join(arcpy.env.workspace,'gis_data\DE_Basin.shp')
-print(de_basin)
 
+#Read data and just keep columns that are needed
 df = pd.read_excel(file)
 df = df[keep_cols]
 
+#Add unique ID
 df['id'] = df.index
 
 #This section identifies all the different needs Cateogries identified in the Needs column 
-
 split_d = df['Project Needs Categories'].str.split('<br>',expand=True)
 df = df.join(split_d)
 
@@ -46,21 +47,27 @@ pivot_df = melted_df.pivot_table(index='id',columns='Category',values='Amount')
 pivot_df.fillna(0,inplace=True)
 
 cols = pivot_df.columns.values
-new_cols = []
 
+print(pivot_df.info())
+print(df.info())
+
+new_cols = []
 for c in cols:
     new_c = c.split('-')[1].strip().replace(" ", "_")
     new_cols.append(new_c)
 
 pivot_df.columns = new_cols
 
-final_df = df.merge(pivot_df,on='id',how='left')
+final_df = df.merge(pivot_df,on='id',how='left') #Merge in collumns containing the funding amount, with category as the heading
+# Delete collumns that are not needed
 final_df.drop(['Cat1_Type','Cat1_Amount','Cat2_Type','Cat2_Amount','Cat3_Type','Cat3_Amount','Cat4_Type','Cat4_Amount','Project Needs Categories'],inplace=True,axis=1)
 
+#Calcualate Total funding for Nature Based Solutions
 final_df['Nature_Based'] = final_df['Hydromodification/Habitat_Restoration'] + \
     final_df['Land_Conservation'] + final_df['Silviculture'] + \
     final_df['Green_Infrastructure']
-    
+
+#Calculate total gray funding   
 final_df['Gray'] = final_df['Current Agreement Amount'] - final_df['Nature_Based']
 
 # Add an array of manual locations to update - set borrowers the geocoder will not recognize to the name of a more reconizable town.
@@ -236,13 +243,14 @@ final_df.loc[final_df['Borrower Name'] == 'New Jersey Water Supply Authority', '
 
 final_df['Location_full'] = final_df['Location'] + ', ' + final_df['State'] + ', USA'
 
-final_df.columns = final_df.columns.str.replace(' ', '_')
-
-print(final_df.head())
+#Remove special characters from column names and reduce column name length to 64 characters, geodatabase column names must be less than 64 characters.
+final_df.columns = final_df.columns.str.replace(' ','_').str.replace('/','_').str.replace('?','')
+final_df.columns = final_df.columns.str[:64]
+print(final_df.info())
 # Connect to your ArcGIS Online account
 gis = GIS("home")
 
-#Geocode
+# Geocode Data
 for index, row in final_df.iterrows():
     geocode_result = geocode(row['Location_full'])[0]
     print(geocode_result)
@@ -252,12 +260,13 @@ for index, row in final_df.iterrows():
         final_df.at[index, 'Longitude'] = geocode_result['location']['x']
         final_df.at[index, 'score'] = geocode_result['score']
 
-
 final_df.drop(['Location_full','Location'],axis=1,inplace=True)
 
+# Output df for just projects in Great Lakes Region
 great_lakes_df = final_df[final_df['State'].isin(['Ohio','Michigan','Wisconsin'])]
 great_lakes_df.to_excel(r'Geocoded_Data\Great_Lakes.xlsx',index=False)
 
+#This section of code intersects projects in the Delaware River Basin with the Basin and flags projects that are located in the Basin
 de_river_df = final_df[final_df['State'].isin(['Delaware','New Jersey','Pennsylvania'])]
 de_river_df.to_excel(r'Geocoded_Data\De_river_states.xlsx',index=False)
 
